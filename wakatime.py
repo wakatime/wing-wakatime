@@ -115,7 +115,7 @@ def _architecture():
 
 
 def _cliLocation():
-    osname = platform.system.lower()
+    osname = platform.system().lower()
     binary = 'wakatime-cli-{osname}-{arch}{ext}'.format(
         osname=osname,
         arch=_architecture(),

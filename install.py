@@ -24,7 +24,8 @@ try:
 except ImportError:
     import configparser
 try:
-    from urllib2 import urlopen, urlretrieve, ProxyHandler, build_opener, install_opener, HTTPError
+    from urllib2 import urlopen, ProxyHandler, build_opener, install_opener, HTTPError
+    from urllib import urlretrieve
 except ImportError:
     from urllib.request import urlopen, urlretrieve, ProxyHandler, build_opener, install_opener
     from urllib.error import HTTPError
@@ -43,16 +44,21 @@ is_win = platform.system() == 'Windows'
 
 CONFIG_DIRS = []
 if is_win:
-    CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing IDE 6', 'scripts'))
-    CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing IDE 6.0', 'scripts'))
-    CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing Personal 6.0', 'scripts'))
-    CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing Personal 6', 'scripts'))
-    CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing 101 6', 'scripts'))
-    CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing 101 6.0', 'scripts'))
+    for i in range(6, 9):
+        CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing IDE {0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing IDE {0}.0'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing Personal {0}.0'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing Personal {0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing 101 {0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing 101 {0}.0'.format(i), 'scripts'))
 else:
-    CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wingide6', 'scripts'))
-    CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wingpersonal6', 'scripts'))
-    CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wing101-6', 'scripts'))
+    for i in range(6, 9):
+        CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wingide{0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wingpersonal{0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wing101-{0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Wing 101', 'v{0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Wing Personal', 'v{0}'.format(i), 'scripts'))
+        CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Wing Pro', 'v{0}'.format(i), 'scripts'))
 
 HOME_FOLDER = None
 CONFIGS = None
