@@ -15,17 +15,10 @@ import wingapi
 import json
 import logging
 import os
-import re
+import platform
 import sys
 import time
 from subprocess import Popen, STDOUT, PIPE
-try:
-    import _winreg as winreg  # py2
-except ImportError:
-    try:
-        import winreg  # py3
-    except ImportError:
-        winreg = None
 try:
     import Queue as queue  # py2
 except ImportError:
@@ -42,7 +35,7 @@ if is_py2:
     def u(text):
         if text is None:
             return None
-        if isinstance(text, unicode):
+        if isinstance(text, unicode):  # noqa: F821
             return text
         try:
             return text.decode('utf-8')
@@ -51,15 +44,15 @@ if is_py2:
                 return text.decode(sys.getdefaultencoding())
             except:
                 try:
-                    return unicode(text)
+                    return unicode(text)  # noqa: F821
                 except:
                     try:
                         return text.decode('utf-8', 'replace')
                     except:
                         try:
-                            return unicode(str(text))
+                            return unicode(str(text))  # noqa: F821
                         except:
-                            return unicode('')
+                            return unicode('')  # noqa: F821
 
 elif is_py3:
     def u(text):
@@ -107,11 +100,28 @@ def _set_timeout(callback, seconds):
 
 
 def _resources_folder():
-    appdata = os.getenv('APPDATA')
-    if appdata and os.path.exists(appdata):
-        return os.path.join(appdata, 'WakaTime')
-    else:
-        return os.path.join(os.path.expanduser('~'), '.wakatime')
+    return os.path.join(os.path.expanduser('~'), '.wakatime')
+
+
+def _architecture():
+    arch = platform.machine() or platform.processor()
+    if arch == 'armv7l':
+        return 'arm'
+    if arch == 'aarch64':
+        return 'arm64'
+    if 'arm' in arch:
+        return 'arm64' if sys.maxsize > 2**32 else 'arm'
+    return 'amd64' if sys.maxsize > 2**32 else '386'
+
+
+def _cliLocation():
+    osname = platform.system.lower()
+    binary = 'wakatime-cli-{osname}-{arch}{ext}'.format(
+        osname=osname,
+        arch=_architecture(),
+        ext='.exe' if osname == 'windows' else '',
+    )
+    return os.path.join(_resources_folder(), binary)
 
 
 def _config_file():
@@ -120,120 +130,6 @@ def _config_file():
         return os.path.join(os.path.expanduser(home), '.wakatime.cfg')
 
     return os.path.join(os.path.expanduser('~'), '.wakatime.cfg')
-
-
-PYTHON_LOCATION = None
-def _python_binary():
-    if PYTHON_LOCATION is not None:
-        logger.info(PYTHON_LOCATION)
-        return PYTHON_LOCATION
-
-    # look for python in PATH and common install locations
-    paths = [
-        os.path.join(_resources_folder(), 'python'),
-        None,
-        '/',
-        '/usr/local/bin/',
-        '/usr/bin/',
-    ]
-    for path in paths:
-        path = find_python_in_folder(path)
-        if path is not None:
-            _set_python_binary_location(path)
-            return path
-
-    # look for python in windows registry
-    path = _find_python_from_registry(r'SOFTWARE\Python\PythonCore')
-    if path is not None:
-        _set_python_binary_location(path)
-        return path
-    path = _find_python_from_registry(r'SOFTWARE\Wow6432Node\Python\PythonCore')
-    if path is not None:
-        _set_python_binary_location(path)
-        return path
-
-    path = wingapi.gApplication.FindPython()
-    if path:
-        _set_python_binary_location(path)
-        return path
-
-    return None
-
-
-def _set_python_binary_location(path):
-    global PYTHON_LOCATION
-    PYTHON_LOCATION = path
-
-
-def _find_python_from_registry(location, reg=None):
-    if winreg is None:
-        return None
-
-    if reg is None:
-        path = _find_python_from_registry(location, reg=winreg.HKEY_CURRENT_USER)
-        if path is None:
-            path = _find_python_from_registry(location, reg=winreg.HKEY_LOCAL_MACHINE)
-        return path
-
-    val = None
-    sub_key = 'InstallPath'
-    compiled = re.compile(r'^\d+\.\d+$')
-
-    try:
-        with winreg.OpenKey(reg, location) as handle:
-            versions = []
-            try:
-                for index in range(1024):
-                    version = winreg.EnumKey(handle, index)
-                    try:
-                        if compiled.search(version):
-                            versions.append(version)
-                    except re.error:
-                        pass
-            except EnvironmentError:
-                pass
-            versions.sort(reverse=True)
-            for version in versions:
-                try:
-                    path = winreg.QueryValue(handle, version + '\\' + sub_key)
-                    if path is not None:
-                        path = find_python_in_folder(path)
-                        if path is not None:
-                            return path
-                except WindowsError:
-                    pass
-    except WindowsError:
-        pass
-    except:
-        pass
-
-    return val
-
-
-def find_python_in_folder(folder, headless=True):
-    pattern = re.compile(r'\d+\.\d+')
-
-    path = 'python'
-    if folder is not None:
-        path = os.path.realpath(os.path.join(folder, 'python'))
-    if headless:
-        path = u(path) + u('w')
-    try:
-        process = Popen([path, '--version'], stdout=PIPE, stderr=STDOUT)
-        output, err = process.communicate()
-        output = u(output).strip()
-        retcode = process.poll()
-        if not retcode and pattern.search(output):
-            return path
-    except:
-        pass
-
-    if headless:
-        path = find_python_in_folder(folder, headless=False)
-        if path is not None:
-            return path
-
-    return None
 
 
 def _obfuscate_apikey(command_list):
@@ -348,60 +244,53 @@ class SendHeartbeatsThread(object):
         return heartbeat
 
     def send_heartbeats(self):
-        python = _python_binary()
-        if python:
-            heartbeat = self.build_heartbeat(**self.heartbeat)
-            ua = 'wing/{editor_version} wing-wakatime/{plugin_version}'.format(
-                editor_version=EDITOR_VERSION,
-                plugin_version=__version__,
-            )
-            cli = os.path.join(_resources_folder(), 'wakatime-master', 'wakatime', 'cli.py')
-            cmd = [
-                python,
-                cli,
-                '--entity', heartbeat['entity'],
-                '--time', str('%f' % heartbeat['timestamp']),
-                '--plugin', ua,
-            ]
-            if heartbeat['is_write']:
-                cmd.append('--write')
-            if heartbeat.get('alternate_project'):
-                cmd.extend(['--alternate-project', heartbeat['alternate_project']])
-            if heartbeat.get('cursorpos') is not None:
-                cmd.extend(['--cursorpos', heartbeat['cursorpos']])
-            if self.has_extra_heartbeats:
-                cmd.append('--extra-heartbeats')
-                stdin = PIPE
-                extra_heartbeats = [self.build_heartbeat(**x) for x in self.extra_heartbeats]
-                extra_heartbeats = json.dumps(extra_heartbeats)
-            else:
-                extra_heartbeats = None
-                stdin = None
-
-            logger.info(' '.join(_obfuscate_apikey(cmd)))
-            try:
-                process = Popen(cmd, stdin=stdin, stdout=PIPE, stderr=STDOUT)
-                inp = None
-                if self.has_extra_heartbeats:
-                    inp = "{0}\n".format(extra_heartbeats)
-                    inp = inp.encode('utf-8')
-                output, err = process.communicate(input=inp)
-                output = u(output)
-                retcode = process.poll()
-                logger.info(retcode)
-                if retcode:
-                    msg = 'wakatime-cli exited with status: {0}'.format(retcode)
-                    if retcode == 102:
-                        logger.warn(msg)
-                    else:
-                        logger.error(msg)
-                if output:
-                    logger.error(u('wakatime-cli output: {0}').format(output))
-            except:
-                logger.error(u(sys.exc_info()[1]))
-
+        heartbeat = self.build_heartbeat(**self.heartbeat)
+        ua = 'wing/{editor_version} wing-wakatime/{plugin_version}'.format(
+            editor_version=EDITOR_VERSION,
+            plugin_version=__version__,
+        )
+        cmd = [
+            _cliLocation(),
+            '--entity', heartbeat['entity'],
+            '--time', str('%f' % heartbeat['timestamp']),
+            '--plugin', ua,
+        ]
+        if heartbeat['is_write']:
+            cmd.append('--write')
+        if heartbeat.get('alternate_project'):
+            cmd.extend(['--alternate-project', heartbeat['alternate_project']])
+        if heartbeat.get('cursorpos') is not None:
+            cmd.extend(['--cursorpos', heartbeat['cursorpos']])
+        if self.has_extra_heartbeats:
+            cmd.append('--extra-heartbeats')
+            stdin = PIPE
+            extra_heartbeats = [self.build_heartbeat(**x) for x in self.extra_heartbeats]
+            extra_heartbeats = json.dumps(extra_heartbeats)
         else:
-            logger.error('Unable to find python binary.')
+            extra_heartbeats = None
+            stdin = None
+
+        logger.info(' '.join(_obfuscate_apikey(cmd)))
+        try:
+            process = Popen(cmd, stdin=stdin, stdout=PIPE, stderr=STDOUT)
+            inp = None
+            if self.has_extra_heartbeats:
+                inp = "{0}\n".format(extra_heartbeats)
+                inp = inp.encode('utf-8')
+            output, err = process.communicate(input=inp)
+            output = u(output)
+            retcode = process.poll()
+            logger.info(retcode)
+            if retcode:
+                msg = 'wakatime-cli exited with status: {0}'.format(retcode)
+                if retcode == 102:
+                    logger.warn(msg)
+                else:
+                    logger.error(msg)
+            if output:
+                logger.error(u('wakatime-cli output: {0}').format(output))
+        except:
+            logger.error(u(sys.exc_info()[1]))
 
 
 def _handle_activity(is_write):
@@ -436,12 +325,6 @@ def _setup_signals():
 def _init(plugin_id):
     logger.info('Initializing WakaTime plugin v{ver}'.format(ver=__version__))
     wingapi.gApplication.EnablePlugin(plugin_id, True)
-
-    if not _python_binary():
-        msg = "Unable to find Python binary!\nWakaTime needs Python to work correctly.\n\nGo to https://www.python.org/downloads"
-        logger.warn(msg)
-        wingapi.gApplication.ShowMessageDialog('Error: WakaTime Missing Python', msg)
-        return
 
     _setup_signals()
 
