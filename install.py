@@ -12,6 +12,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import ssl
 import subprocess
 import sys
@@ -129,6 +130,7 @@ def main(home=None):
     # download wakatime-cli
     if not isCliLatest():
         downloadCLI()
+        createSymlink()
 
     # download plugin
     contents = get_file_contents(FILE)
@@ -151,14 +153,14 @@ class Popen(subprocess.Popen):
     """Patched Popen to prevent opening cmd window on Windows platform."""
 
     def __init__(self, *args, **kwargs):
-        startupinfo = kwargs.get('startupinfo')
-        if is_win or True:
+        if is_win:
+            startupinfo = kwargs.get('startupinfo')
             try:
                 startupinfo = startupinfo or subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             except AttributeError:
                 pass
-        kwargs['startupinfo'] = startupinfo
+            kwargs['startupinfo'] = startupinfo
         super(Popen, self).__init__(*args, **kwargs)
 
 
@@ -526,6 +528,27 @@ def save_file(filename, contents):
 
     with open(filename, 'w', encoding='utf-8') as fh:
         fh.write(contents)
+
+
+def createSymlink():
+    if is_win:
+        link = os.path.join(getResourcesFolder(), 'wakatime-cli.exe')
+        if os.path.exists(link):
+            try:
+                os.remove(link)
+            except:
+                log(traceback.format_exc())
+        try:
+            shutil.copy2(getCliLocation(), link)
+        except:
+            log(traceback.format_exc())
+    else:
+        link = os.path.join(getResourcesFolder(), 'wakatime-cli')
+        if not os.path.exists(link):
+            try:
+                os.symlink(getCliLocation(), link)
+            except:
+                pass
 
 
 if __name__ == '__main__':
