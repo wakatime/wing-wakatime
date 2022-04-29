@@ -26,10 +26,9 @@ try:
 except ImportError:
     from configparser import ConfigParser, Error as ConfigParserError
 try:
-    from urllib2 import urlopen, ProxyHandler, build_opener, install_opener, HTTPError
-    from urllib import urlretrieve
+    from urllib2 import Request, urlopen, HTTPError
 except ImportError:
-    from urllib.request import urlopen, urlretrieve, ProxyHandler, build_opener, install_opener
+    from urllib.request import Request, urlopen
     from urllib.error import HTTPError
 
 
@@ -427,64 +426,6 @@ def reportMissingPlatformSupport(osname, arch):
     request(url)
 
 
-def request(url, last_modified=None):
-    proxy = CONFIGS.get('settings', 'proxy') if CONFIGS.has_option('settings', 'proxy') else None
-    if proxy:
-        opener = build_opener(ProxyHandler({
-            'http': proxy,
-            'https': proxy,
-        }))
-    else:
-        opener = build_opener()
-
-    headers = [('User-Agent', 'github.com/wakatime/{plugin}-wakatime'.format(plugin=PLUGIN))]
-    if last_modified:
-        headers.append(('If-Modified-Since', last_modified))
-
-    opener.addheaders = headers
-
-    install_opener(opener)
-
-    try:
-        resp = urlopen(url)
-        headers = dict(resp.getheaders()) if is_py2 else resp.headers
-        return headers, resp.read(), resp.getcode()
-    except HTTPError as err:
-        if err.code == 304:
-            return None, None, 304
-        if is_py2:
-            ssl._create_default_https_context = ssl._create_unverified_context
-            try:
-                resp = urlopen(url)
-                headers = dict(resp.getheaders()) if is_py2 else resp.headers
-                return headers, resp.read(), resp.getcode()
-            except HTTPError as err2:
-                if err2.code == 304:
-                    return None, None, 304
-                log(err.read().decode())
-                log(err2.read().decode())
-                raise
-            except IOError:
-                raise
-        log(err.read().decode())
-        raise
-    except IOError:
-        if is_py2:
-            ssl._create_default_https_context = ssl._create_unverified_context
-            try:
-                resp = urlopen(url)
-                headers = dict(resp.getheaders()) if is_py2 else resp.headers
-                return headers, resp.read(), resp.getcode()
-            except HTTPError as err:
-                if err.code == 304:
-                    return None, None, 304
-                log(err.read().decode())
-                raise
-            except IOError:
-                raise
-        raise
-
-
 def get_file_contents(filename):
     """Get file contents from local folder or GitHub repo."""
 
@@ -501,26 +442,99 @@ def get_file_contents(filename):
         return contents
 
 
-def download(url, filePath):
+def request(url, last_modified=None):
+    req = Request(url)
+    req.add_header('User-Agent', 'github.com/wakatime/{plugin}-wakatime'.format(plugin=PLUGIN))
+
     proxy = CONFIGS.get('settings', 'proxy') if CONFIGS.has_option('settings', 'proxy') else None
     if proxy:
-        opener = build_opener(ProxyHandler({
-            'http': proxy,
-            'https': proxy,
-        }))
-    else:
-        opener = build_opener()
-    opener.addheaders = [('User-Agent', 'github.com/wakatime/{plugin}-wakatime'.format(plugin=PLUGIN))]
+        req.set_proxy(proxy, 'https')
 
-    install_opener(opener)
+    if last_modified:
+        req.add_header('If-Modified-Since', last_modified)
 
     try:
-        urlretrieve(url, filePath)
+        resp = urlopen(req)
+        headers = dict(resp.getheaders()) if is_py2 else resp.headers
+        return headers, resp.read(), resp.getcode()
+    except HTTPError as err:
+        if err.code == 304:
+            return None, None, 304
+        if is_py2:
+            with SSLCertVerificationDisabled():
+                try:
+                    resp = urlopen(req)
+                    headers = dict(resp.getheaders()) if is_py2 else resp.headers
+                    return headers, resp.read(), resp.getcode()
+                except HTTPError as err2:
+                    if err2.code == 304:
+                        return None, None, 304
+                    log(err.read().decode())
+                    log(err2.read().decode())
+                    raise
+                except IOError:
+                    raise
+        log(err.read().decode())
+        raise
     except IOError:
         if is_py2:
-            ssl._create_default_https_context = ssl._create_unverified_context
-            urlretrieve(url, filePath)
+            with SSLCertVerificationDisabled():
+                try:
+                    resp = urlopen(url)
+                    headers = dict(resp.getheaders()) if is_py2 else resp.headers
+                    return headers, resp.read(), resp.getcode()
+                except HTTPError as err:
+                    if err.code == 304:
+                        return None, None, 304
+                    log(err.read().decode())
+                    raise
+                except IOError:
+                    raise
         raise
+
+
+def download(url, filePath):
+    req = Request(url)
+    req.add_header('User-Agent', 'github.com/wakatime/{plugin}-wakatime'.format(plugin=PLUGIN))
+
+    proxy = CONFIGS.get('settings', 'proxy') if CONFIGS.has_option('settings', 'proxy') else None
+    if proxy:
+        req.set_proxy(proxy, 'https')
+
+    with open(filePath, 'wb') as fh:
+        try:
+            resp = urlopen(req)
+            fh.write(resp.read())
+        except HTTPError as err:
+            if err.code == 304:
+                return None, None, 304
+            if is_py2:
+                with SSLCertVerificationDisabled():
+                    try:
+                        resp = urlopen(req)
+                        fh.write(resp.read())
+                        return
+                    except HTTPError as err2:
+                        log(err.read().decode())
+                        log(err2.read().decode())
+                        raise
+                    except IOError:
+                        raise
+            log(err.read().decode())
+            raise
+        except IOError:
+            if is_py2:
+                with SSLCertVerificationDisabled():
+                    try:
+                        resp = urlopen(url)
+                        fh.write(resp.read())
+                        return
+                    except HTTPError as err:
+                        log(err.read().decode())
+                        raise
+                    except IOError:
+                        raise
+            raise
 
 
 def save_file(filename, contents):
@@ -530,25 +544,44 @@ def save_file(filename, contents):
         fh.write(contents)
 
 
+def is_symlink(path):
+    try:
+        return os.is_symlink(path)
+    except:
+        return False
+
+
 def createSymlink():
+    link = os.path.join(getResourcesFolder(), 'wakatime-cli')
     if is_win:
-        link = os.path.join(getResourcesFolder(), 'wakatime-cli.exe')
-        if os.path.exists(link):
-            try:
-                os.remove(link)
-            except:
-                log(traceback.format_exc())
+        link = link + '.exe'
+    elif os.path.exists(link) and is_symlink(link):
+        return  # don't re-create symlink on Unix-like platforms
+
+    if os.path.isdir(link):
+        shutil.rmtree(link)
+    elif os.path.isfile(link):
+        os.remove(link)
+
+    try:
+        os.symlink(getCliLocation(), link)
+    except:
         try:
             shutil.copy2(getCliLocation(), link)
+            if not is_win:
+                os.chmod(link, 509)  # 755
         except:
             log(traceback.format_exc())
-    else:
-        link = os.path.join(getResourcesFolder(), 'wakatime-cli')
-        if not os.path.exists(link):
-            try:
-                os.symlink(getCliLocation(), link)
-            except:
-                pass
+
+
+class SSLCertVerificationDisabled(object):
+
+    def __enter__(self):
+        self.original_context = ssl._create_default_https_context
+        ssl._create_default_https_context = ssl._create_unverified_context
+
+    def __exit__(self, *args, **kwargs):
+        ssl._create_default_https_context = self.original_context
 
 
 if __name__ == '__main__':
