@@ -283,7 +283,7 @@ class SendHeartbeatsThread(object):
             logger.info(retcode)
             if retcode:
                 msg = 'wakatime-cli exited with status: {0}'.format(retcode)
-                if retcode == 102:
+                if retcode == 102 or retcode == 112:
                     logger.warn(msg)
                 else:
                     logger.error(msg)
