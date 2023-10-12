@@ -1,11 +1,8 @@
-wing-wakatime
-=============
+# wing-wakatime
 
 Metrics, insights, and time tracking automatically generated from your programming activity.
 
-
-Installation
-------------
+## Installation
 
 1. `curl -fsSL https://raw.githubusercontent.com/wakatime/wing-wakatime/master/install.py | python` or download and extract [wing-wakatime-master.zip](https://github.com/wakatime/wing-wakatime/archive/master.zip), then double click `install.py`.
 
@@ -15,15 +12,11 @@ Installation
 
 4. Use Wing and your coding activity will be displayed on your [WakaTime dashboard](https://wakatime.com).
 
-
-Screen Shots
-------------
+## Screen Shots
 
 ![Project Overview](https://wakatime.com/static/img/ScreenShots/Screen-Shot-2016-03-21.png)
 
-
-Troubleshooting
----------------
+## Troubleshooting
 
 First, turn on debug mode in your `~/.wakatime.cfg` file by adding this line:
 
@@ -31,6 +24,6 @@ First, turn on debug mode in your `~/.wakatime.cfg` file by adding this line:
 
 Then, look for error messages in the Messages window at the bottom.
 
-Also, tail your `$HOME/.wakatime.log` file to debug wakatime cli problems.
+Also, tail your `$HOME/.wakatime/wakatime.log` file to debug wakatime cli problems.
 
 For more general troubleshooting information, see [wakatime/wakatime#troubleshooting](https://github.com/wakatime/wakatime#troubleshooting).
