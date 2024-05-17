@@ -45,7 +45,7 @@ is_win = platform.system() == 'Windows'
 
 CONFIG_DIRS = []
 if is_win:
-    for i in range(6, 9):
+    for i in range(6, 99):
         CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing IDE {0}'.format(i), 'scripts'))
         CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing IDE {0}.0'.format(i), 'scripts'))
         CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing Personal {0}.0'.format(i), 'scripts'))
@@ -53,7 +53,7 @@ if is_win:
         CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing 101 {0}'.format(i), 'scripts'))
         CONFIG_DIRS.append(os.path.join(os.getenv('APPDATA'), 'Wing 101 {0}.0'.format(i), 'scripts'))
 else:
-    for i in range(6, 9):
+    for i in range(6, 99):
         CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wingide{0}'.format(i), 'scripts'))
         CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wingpersonal{0}'.format(i), 'scripts'))
         CONFIG_DIRS.append(os.path.join(os.path.expanduser('~'), '.wing101-{0}'.format(i), 'scripts'))
